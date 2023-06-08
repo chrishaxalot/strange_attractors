@@ -1,5 +1,6 @@
+use crate::attractor_file::{is_between, scale, CliffordAttractor, Point};
 use image::{ImageBuffer, Luma};
-use indicatif::ProgressBar;
+use rayon::prelude::*;
 use std::collections::BTreeSet;
 use std::time::Instant;
 
@@ -11,39 +12,60 @@ const Y_MIN: f64 = -2.5;
 const Y_MAX: f64 = 2.5;
 const IMG_ROWS: usize = 2000;
 const IMG_COLUMNS: usize = 2000;
-const ITERATIONS: u64 = 50_000_000;
-const UPDATE_INTERVAL: u64 = ITERATIONS / 100;
+const ITERATIONS: u64 = 500_000_000;
+
+fn point_to_vec(points: &Vec<Point>) -> Vec<u64> {
+    let mut pixels: Vec<u64> = vec![0; IMG_ROWS * IMG_COLUMNS];
+
+    points.iter().for_each(|point| {
+        let scaled_x = scale(X_MIN, X_MAX, 0, (IMG_ROWS - 1) as u32, point.x);
+        let scaled_y = scale(Y_MIN, Y_MAX, 0, (IMG_COLUMNS - 1) as u32, point.y);
+        if is_between(0, (IMG_ROWS - 1) as u32, scaled_x)
+            & is_between(0, (IMG_COLUMNS - 1) as u32, scaled_y)
+        {
+            let pixel_position = (scaled_x + scaled_y * IMG_COLUMNS as u32) as usize;
+            pixels[pixel_position] += 1;
+        }
+    });
+
+    pixels
+}
 
 fn main() {
     let start = Instant::now();
 
-    let attractor = attractor_file::CliffordAttractor {
-        point: attractor_file::Point { x: 1.0, y: 1.0 },
+    let attractor = CliffordAttractor {
+        point: Point { x: 1.0, y: 1.0 },
         a: -1.7,
         b: 1.3,
         c: -0.1,
         d: -1.2,
     };
 
-    let mut pixels: Vec<u64> = vec![0; IMG_ROWS * IMG_COLUMNS];
-    let progress_bar = ProgressBar::new(ITERATIONS);
+    let mut points: Vec<Point> = Vec::new();
+    attractor
+        .into_iter()
+        .take(ITERATIONS as usize)
+        .for_each(|point| points.push(point));
 
-    for (i, point) in attractor.into_iter().take(ITERATIONS as usize).enumerate() {
-        let scaled_x = attractor_file::scale(X_MIN, X_MAX, 0, (IMG_ROWS - 1) as u32, point.x);
-        let scaled_y = attractor_file::scale(Y_MIN, Y_MAX, 0, (IMG_COLUMNS - 1) as u32, point.y);
-        if attractor_file::is_between(0, (IMG_ROWS - 1) as u32, scaled_x)
-            & attractor_file::is_between(0, (IMG_COLUMNS - 1) as u32, scaled_y)
-        {
-            pixels[(scaled_x + scaled_y * IMG_COLUMNS as u32) as usize] += 1;
-        }
+    let pixel_slices: Vec<Vec<Point>> = points
+        .chunks(points.len() / 16)
+        .map(|chunk| chunk.to_vec())
+        .collect();
 
-        if i % UPDATE_INTERVAL as usize == 0 {
-            progress_bar.inc(UPDATE_INTERVAL);
-        }
-    }
-    progress_bar.finish();
+    let pixels: Vec<Vec<u64>> = pixel_slices
+        .par_iter()
+        .map(|points| point_to_vec(points))
+        .collect();
 
-    pixels = pixels.iter().map(|x| (*x as f32).log(1.5) as u64).collect();
+    let pixels: Vec<u64> = pixels
+        .iter()
+        .fold(vec![0; pixels[0].len()], |mut acc, vec| {
+            acc.iter_mut().zip(vec.iter()).for_each(|(a, &b)| *a += b);
+            acc
+        });
+
+    let pixels: Vec<u64> = pixels.iter().map(|x| (*x as f32).log(1.5) as u64).collect();
     let unique_pixels: BTreeSet<u64> = pixels.iter().cloned().collect();
 
     let pixels: Vec<u64> = pixels
@@ -69,3 +91,4 @@ fn main() {
     let end = Instant::now();
     println!("execution time was {:?}", end - start);
 }
+
