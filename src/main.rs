@@ -14,26 +14,28 @@ fn main() {
         d: -1.2,
     };
 
-    let iterations = 50_000_000;
-
-    let img_rows = 2000;
-    let img_columns = 2000;
+    let iterations = 50_000_000_000;
+    let pixels_per_unit = 5000;
     let x_min = -2.5;
     let x_max = 2.5;
     let y_min = -2.5;
     let y_max = 2.5;
 
+    let img_columns = (x_max - x_min) as usize * pixels_per_unit;
+    let img_rows = (y_max - y_min) as usize * pixels_per_unit;
+    println!("{} {}", img_rows, img_columns);
+
     let mut pixels: Vec<u64> = vec![0; img_rows * img_columns];
-    let update_intervall = 1000;
+    let update_intervall = 5000000;
 
     let progress_bar = ProgressBar::new(iterations);
-    for (i, point) in attractor.into_iter().take(iterations as usize).enumerate() {
-        let scaled_x = attractor_file::scale(x_min, x_max, 0, img_rows as u32 - 1, point.x);
-        let scaled_y = attractor_file::scale(y_min, y_max, 0, img_columns as u32 - 1, point.y);
-        if attractor_file::is_between(0, (img_rows - 1) as u32, scaled_x)
-            & attractor_file::is_between(0, (img_columns - 1) as u32, scaled_y)
+    for (i, point) in attractor.take(iterations as usize).enumerate() {
+        let scaled_x = attractor_file::scale(x_min, x_max, 0, img_columns as u32 - 1, point.x);
+        let scaled_y = attractor_file::scale(-y_max, -y_min, 0, img_rows as u32 - 1, point.y);
+        if attractor_file::is_between(0, (img_columns - 1) as u32, scaled_x)
+            & attractor_file::is_between(0, (img_rows - 1) as u32, scaled_y)
         {
-            pixels[(scaled_x + scaled_y * img_columns as u32) as usize] += 1;
+            pixels[scaled_y as usize * img_columns + scaled_x as usize] += 1;
         }
 
         // updating every iteration is too slow as IO becomes bottleneck
