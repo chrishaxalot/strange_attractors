@@ -1,23 +1,29 @@
-#[derive(Clone, Copy)]
+use rug::Float;
+
+pub const PRECISION: u32 = 256;
+
+#[derive(Clone)]
 pub struct Point {
-    pub x: f64,
-    pub y: f64,
+    pub x: Float,
+    pub y: Float,
 }
 
 pub struct CliffordAttractor {
     pub point: Point,
-    pub a: f64,
-    pub b: f64,
-    pub c: f64,
-    pub d: f64,
+    pub a: Float,
+    pub b: Float,
+    pub c: Float,
+    pub d: Float,
 }
 
-pub fn scale(a_min: f64, a_max: f64, b_min: u32, b_max: u32, x: f64) -> u32 {
-    let x_in_percent = (x - a_min) / (a_max - a_min);
-    b_min + (((b_max - b_min) as f64) * x_in_percent) as u32
+pub fn scale(a_min: &Float, a_max: &Float, b_min: u32, b_max: u32, x: &Float) -> i32 {
+    let a_diff = Float::with_val(PRECISION, a_max - a_min);
+    let x_in_percent = Float::with_val(PRECISION, x - a_min) / &a_diff;
+    let x_as_float = Float::with_val(PRECISION, b_max as i32 - b_min as i32) * x_in_percent;
+    b_min as i32 + x_as_float.to_integer().unwrap().to_i32().unwrap()
 }
 
-pub fn is_between(min: u32, max: u32, x: u32) -> bool {
+pub fn is_between(min: i32, max: i32, x: i32) -> bool {
     (x >= min) & (x <= max)
 }
 
@@ -25,10 +31,12 @@ impl Iterator for CliffordAttractor {
     type Item = Point;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let current = self.point;
+        let current = self.point.clone();
 
-        self.point.x = (self.a * current.y).sin() + self.c * (self.a * current.x).cos();
-        self.point.y = (self.b * current.x).sin() + self.d * (self.b * current.y).cos();
+        self.point.x = (self.a.clone() * current.y.clone()).sin()
+            + self.c.clone() * (self.a.clone() * current.x.clone()).cos();
+        self.point.y = (self.b.clone() * current.x.clone()).sin()
+            + self.d.clone() * (self.b.clone() * current.y.clone()).cos();
 
         Some(current)
     }
